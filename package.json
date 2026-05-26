@@ -1,0 +1,48 @@
+{
+  "name": "rive-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for Rive — create, edit, and control .riv animation files from AI agents",
+  "main": "build/index.js",
+  "type": "module",
+  "bin": {
+    "rive-mcp": "build/index.js"
+  },
+  "files": [
+    "build/",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/FUNGnix/rive-mcp"
+  },
+  "keywords": [
+    "rive",
+    "animation",
+    "mcp",
+    "model-context-protocol",
+    "motion-design",
+    "claude",
+    "ai-agent",
+    "riv",
+    "state-machine",
+    "keyframe"
+  ],
+  "author": "FUNGnix",
+  "license": "MIT",
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=build/index.js --packages=external",
+    "start": "node build/index.js",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.28.0",
+    "zod": "^3.22.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "esbuild": "^0.27.0",
+    "typescript": "^5.3.0"
+  }
+}

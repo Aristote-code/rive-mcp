@@ -1,0 +1,7 @@
+node_modules/
+build/
+vendor/
+test/fixtures/
+.git/
+.DS_Store
+*.tgz
