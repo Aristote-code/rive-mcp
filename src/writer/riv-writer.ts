@@ -434,40 +434,80 @@ export class RivFileWriter {
   }
 
   private writeStateMachine(sm: RivStateMachine): void {
+    // StateMachine (typeKey 53)
     const smProps: Record<number, { value: unknown; type: PropertyType }> = {};
     this.addProp(smProps, PK.smName, sm.name, PropertyType.String);
     this.writeObject("StateMachine", smProps);
 
-    // States
-    for (const state of sm.states) {
+    // StateMachineLayer (typeKey 57) — a state machine is the parent of one layer
+    // We use id 10000 range for SM objects
+    const layerBaseId = 10000;
+
+    // States (AnimationState typeKey 61)
+    const stateIdMap = new Map<number, number>();
+    for (let i = 0; i < sm.states.length; i++) {
+      const state = sm.states[i];
+      const stateId = layerBaseId + i;
+      stateIdMap.set(i, stateId);
+
       const stateProps: Record<number, { value: unknown; type: PropertyType }> = {};
       this.addProp(stateProps, PK.smName, state.name, PropertyType.String);
+      if (state.animationIndex !== undefined) {
+        this.addProp(stateProps, 165, state.animationIndex, PropertyType.Uint); // animationId
+      }
       this.writeObject("AnimationState", stateProps);
     }
 
-    // Transitions
-    for (const t of sm.transitions) {
+    // Transitions (StateTransition typeKey 65) + TransitionCondition
+    const transBaseId = layerBaseId + sm.states.length;
+    for (let i = 0; i < sm.transitions.length; i++) {
+      const t = sm.transitions[i];
+      const transId = transBaseId + i * 2;
+
       const transProps: Record<number, { value: unknown; type: PropertyType }> = {};
       this.addProp(transProps, PK.smName, `trans_${t.fromState}_to_${t.toState}`, PropertyType.String);
-      this.addProp(transProps, PK.stateToId, t.toState, PropertyType.Uint);
-      this.addProp(transProps, PK.strength, t.duration, PropertyType.Double);
+      // Reference destination state by id (not index)
+      const toStateId = stateIdMap.get(t.toState) || 0;
+      this.addProp(transProps, PK.stateToId, toStateId, PropertyType.Uint);
+      this.addProp(transProps, PK.transitionDuration, t.duration, PropertyType.Uint);
       this.writeObject("StateTransition", transProps);
+
+      // Write TransitionCondition if specified
+      if (t.conditionType && t.conditionType !== "none") {
+        const condProps: Record<number, { value: unknown; type: PropertyType }> = {};
+        this.addProp(condProps, PK.name, `cond_${t.fromState}_to_${t.toState}`, PropertyType.String);
+        this.addProp(condProps, PK.parentId, transId, PropertyType.Uint);
+
+        // inputId reference (the name maps to the input index)
+        if (t.conditionInput) {
+          this.addProp(condProps, PK.inputId, 0, PropertyType.Uint); // input ref; will need mapping
+        }
+
+        // Write the value condition based on type
+        if (t.conditionType === "input" && t.conditionValue !== undefined) {
+          this.addProp(condProps, PK.transValue, Number(t.conditionValue), PropertyType.Double);
+        }
+
+        // Pick the right condition type
+        const condTypeName = "TransitionNumberCondition"; // typeKey 70
+        this.writeObject(condTypeName, condProps);
+      }
     }
 
     // Inputs
-    for (const input of sm.inputs) {
+    const inputBaseId = transBaseId + sm.transitions.length * 2;
+    for (let i = 0; i < sm.inputs.length; i++) {
+      const input = sm.inputs[i];
       const inputType = input.type === "number" ? "StateMachineNumber"
         : input.type === "boolean" ? "StateMachineBool"
         : "StateMachineTrigger";
 
       const inputProps: Record<number, { value: unknown; type: PropertyType }> = {};
-      this.addProp(inputProps, 4, input.name, PropertyType.String);
-      if (input.defaultValue !== undefined) {
-        if (input.type === "number") {
-          this.addProp(inputProps, 120, input.defaultValue as number, PropertyType.Double);
-        } else if (input.type === "boolean") {
-          this.addProp(inputProps, 121, input.defaultValue as number, PropertyType.Bool);
-        }
+      this.addProp(inputProps, PK.name, input.name, PropertyType.String);
+      if (input.type === "number" && input.defaultValue !== undefined) {
+        this.addProp(inputProps, PK.smInputValue, Number(input.defaultValue), PropertyType.Double);
+      } else if (input.type === "boolean" && input.defaultValue !== undefined) {
+        this.addProp(inputProps, PK.smBoolValue, input.defaultValue ? 1 : 0, PropertyType.Bool);
       }
       this.writeObject(inputType, inputProps);
     }
@@ -504,16 +544,17 @@ const PK = {
   smName: 138,
   stateToId: 151,
   inputId: 155,
-  strength: 172,
+  transValue: 157,        // TransitionNumberConditionBase
+  transitionFlags: 152,
+  transitionDuration: 158,
+  exitTime: 160,
+  smInputValue: 140,      // StateMachineNumberBase
+  smBoolValue: 141,       // StateMachineBoolBase
   linkCornerRadius: 164,
   cornerRadiusTR: 161,
   cornerRadiusBL: 162,
   cornerRadiusBR: 163,
-  defaultStateMachineId: 236,
-  // Animation-related
-  duration: 999,   // approximation — will need checking
-  // State machine layer
-  flags: 536,
+  layerFlags: 536,
 } as const;
 
 function propertyNameToKey(name: string): number {
